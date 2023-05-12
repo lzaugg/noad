@@ -1,0 +1,291 @@
+<html>
+<head>
+
+    <title>NOAD - NodeJS on Android Demo</title>
+    <link rel="stylesheet" href="/revealjs/dist/reveal.css">
+    <link rel="stylesheet" href="/revealjs/plugin/highlight/monokai.css">
+    <link rel="stylesheet" href="/revealjs/dist/theme/black.css">
+</head>
+<body>
+<div class="reveal">
+    <div class="slides">
+        <section>
+            <!--Disclaimer-->
+            <section>
+                <h1>NOAD - NodeJS on Android</h1>
+                <p>https://github.com/lzaugg/noad</p>
+                <aside class="notes">
+                    <ul>
+                        <li>let's start..</li>
+                        <li>all code fragments are simplified (mostly Java)</li>
+                        <li>application of process lifecycle management is independent of language</li>
+                    </ul>
+                </aside>
+            </section>
+        </section>
+        <section>
+            <!--PREPARE-->
+            <!--make things work-->
+            <section>
+                <h1 class="fragment">PREPARE</h1>
+                <aside class="notes">
+                    <ul>
+                        <li>the single executable NodeJS binary is named `lib-node-noad.so`</li>
+                        <li>we have a binary, not enough in real life to survive</li>
+                    </ul>
+                </aside>
+            </section>
+            <section>
+                <p>NodeJS exe</p>
+                <pre><code class="language-xml" data-trim>
+                    &lt;application android:extractNativeLibs=&quot;true&quot;/&gt;
+                </code></pre>
+                <pre><code class="language-java" data-trim>
+                    var nativeLibsDir = mContext
+                        .getApplicationInfo()
+                        .nativeLibraryDir
+                </code></pre>
+                <aside class="notes">
+                    because we'll run a NodeJS process eventually, everything needs to be POSIX
+                    filesystem aware (no fancy app bundles or memmapping supported)
+                </aside>
+            </section>
+            <section>
+                <p>custom install (at runtime) for NodeJS app</p>
+                <pre><code class="language-java" data-trim>
+                    var appRootDir = mContext.getFilesDir()
+                </code></pre>
+                <pre><code class="language-java" data-trim>
+                    - extract "assets/v1/demo-js.zip" from its own apk...
+                    - unzip "assets/v1/demo-js.zip" to ${appRootDir} directory
+                </code></pre>
+
+                <aside class="notes">
+                    <ul>
+                        <li>we have our NodeJS App packaged in `assets/v1/demo-js.zip`</li>
+                        <li>packaged as zip file because of</li>
+                        <li>files have to be extracted to file system anyway</li>
+                        <li>easy replaceable single artefact (updating, versioning, ...)</li>
+                        <li>APK -> Android Package Kit. Usually nothing more than a Zip file. Means the
+                    demo-js.zip is a zip in a zip.</li>
+                    </ul>
+                </aside>
+            </section>
+        </section>
+        <section>
+            <!--START-->
+            <section>
+                <div class="fragment">
+                    <h1>START</h1>
+                    <pre><code data-trim>
+
+                        var process = new ProcessBuilder(
+                            lib-node-noad.so",
+                            appRootDir + "/demo-js/index.js"
+                          )
+                          .directory(nativeLibsDir)
+                          .start()
+
+                </code></pre>
+                </div>
+                <aside class="notes">
+                    <p>we know</p>
+                    <ul>
+                        <li>the location where the NodeJS app was extracted to</li>
+                        <li>the location of the NodeJS binary</li>
+                        <li>how to start a NodeJS app</li>
+                    </ul>
+                    <p>we're able to start a NodeJS process. :tada</p>
+                </aside>
+            </section>
+            <section>
+                <h1>🔨</h1>
+                <pre><code class="language-java">process.waitFor()</code></pre>
+                <pre><code class="language-java">process.isAlive()</code></pre>
+                <pre><code class="language-java">process.destroy()</code></pre>
+            </section>
+            <aside class="notes">
+                - not a lot to control though ...
+                - similar to other languages. The base of process management.
+                - there's an additional `destroyForcibly()` - basically a SIGKILL (whereas the
+                `destroy()` sends a SIGTERM)
+                - is our app running? did it throw an exception (what kind?? stderr somewhere?
+            </aside>
+            <section>
+                <h1>😟</h1>
+                <ul><li>stderr/stdout redirects?</li>
+                    <li>awaiting alive of process?</li>
+                    <li><code>stop()</code> should stop the process eventually (100%)</li>
+                    <li> ...</li>
+                </ul>
+            </section>
+            <aside class="notes">
+                basics ...
+            </aside>
+        </section>
+        <section>
+            <!--PROCESS CONTROL-->
+            <section>
+                <h1 class="fragment">PROCESS CONTROL</h1>
+            </section>
+            <section>
+                <p>ProcessRunner (custom)</p>
+                <pre><code class="language-java" data-trim>
+                    var processRunner = new ProcessRunner(args);
+                    processRunner.setStdoutHandler(stdoutMsg -> {});
+                    processRunner.setStderrHandler(stdoutMsg -> {});
+                    CompletableFuture.runAsync(processRunner);
+                </code></pre>
+                <pre><code class="language-java">processRunner.awaitStarted()</code></pre>
+                <pre><code class="language-java">processRunner.stop(long timeout, TimeUnit unit))</code></pre>
+                <aside class="notes">
+                    <ul>
+                        <li>we have everything covered right?</li>
+                        <li>is our app really alive?</li>
+                    </ul>
+                </aside>
+            </section>
+            <section>
+                <h1>🤔</h1>
+                <p>is our NodeJS app really ready (not just the process)?</p>
+                <p>what do we do if someone else kills the process?</p>
+                <p>Android..  battery saving, cpu throttling, app suspending, cache cleansing, 😱</p>
+            </section>
+            <aside class="notes">
+                <ul>
+                    <li>expect everything (under Android)</li>
+                    <li>AAAAAAAAHHHRGGG</li>
+                </ul>
+            </aside>
+        </section>
+        <section>
+            <!--LIFECYCLE CONTROL-->
+            <section>
+                <h1 class="fragment">Lifecycle Control</h1>
+            </section>
+            <section>
+                <img src="img/states/states-1.png">
+                <aside class="notes">
+                    <ul>
+                        <li>overview of the different status we know</li>
+                        <li>the status `cleared` and the command `clear` is new ...
+                        but if you can extract a Zip file to a location, you should probably also being able to remove it from there.</li>
+                        <li>btw, if you change assets and only extract the zip files over the existing NodeJS app, nothing will be deleted - at most overwritten.</li>
+                    </ul>
+                </aside>
+            </section>
+            <section>
+                <p>LifecycleControl (custom)</p>
+                <pre><code class="language-java" data-trim>
+                    var lifecycleControl = new LifecycleControl(processRunner);
+                    lifecycleControl.addListener(operationEvent -> {});
+                    var change1 = lifecycleControl.prepare();
+                    var change2 = lifecycleControl.start();
+                    var change3 = lifecycleControl.stop();
+                    var change4 = lifecycleControl.clear();
+                </code></pre>
+                <aside class="notes">
+                    <ul>
+                        <li>probably the most important method is `addListener`</li>
+                        <li>all commands are handled async and trigger a change eventually</li>
+                        <li>changes are futures (promises) with additional properties (e.g. from/to state, sequence in change, result/error, ...).</li>
+                        <li>If a status change has been processed by the lifecycle, the change gets resolved and an `operationEvent`
+                        (with the sequence from the change) gets fired (independent of the result of the change).
+                        </li>
+                        <li>all changes to a lifecycle object have to be applied sequentially!</li>
+                        <li>additional internal statuses might exist</li>
+                        <li>needs to find out the current (consistent) status on start (bootstrapping).</li>
+                    </ul>
+                </aside>
+            </section>
+
+            <section>
+                <img src="img/states/states-complete2.png">
+                <aside class="notes">
+                    <ul>
+                        <li>eventually still the same main statuses, but additional child statuses</li>
+                        <li>and a new error status where applicable (also a child status)</li>
+                        <li>on each status change, something might go wrong. In such a case the change might trigger an error status eventually (depending from/to)</li>
+                    </ul>
+                </aside>
+            </section>
+            <section>
+                <p>LifecycleControl Composite</p>
+                <pre><code class="language-java" data-trim>
+                    var lc1 = new LifecycleRestartControl(lifecycleControl);
+
+                    var lc2 = new LifecycleControl(processRunner2);
+                    var lifecycleMultiControl = new LifecycleMultiControl()
+                        .addLifecycleControl(lc1)
+                        .addLifecycleControl(lc2);
+                </code></pre>
+                <aside class="notes">
+                    <ul>
+                        <li>Sharing the same interface, makes developers life much easier</li>
+                        <li>actually we had the need in a project once to sync multiple processes</li>
+                        <li>can be used for Threads too (no process then)</li>
+                    </ul>
+                </aside>
+            </section>
+        </section>
+        <section>
+            <!--EHLO - IPC-->
+            <section>
+                <h1 class="fragment">EHLO</h1>
+                <aside class="notes">
+                    <ul>
+                        <li>how to communicate between Android and NodeJS?</li>
+                        <li>not per se an Android/NodeJS question, but IPC in general. Check https://en.wikipedia.org/wiki/Inter-process_communication .</li>
+                    </ul>
+                </aside>
+            </section>
+            <section>
+                <h1>📣</h1>
+                <p>sockets</p>
+                <p>files</p>
+                <p>named pipe (like stdout, stderr)</p>
+            </section>
+        </section>
+        <section>
+            <!--LEARNINGS-->
+            <section>
+                <h1 class="fragment">🙋</h1>
+            </section>
+            <section>
+                <p>Unix Domain Sockets</p>
+                <p>Main Thread</p>
+                <p>Memory</p>
+                <p>Stateless</p>
+                <aside class="notes">
+                    <ul>
+                        <li>use Unix Sockets for communication -> Security!</li>
+                        <li>invest time in bullet proof lifecycle control (bottom up)</li>
+                        <li>don't block the main thread. Although message passing needs to happen on main thread!</li>
+                        <li>watch your threads and memory</li>
+                        <li>a process can be killed. Be stateless, use Android helpers for managing state. No long running things with state in NodeJS (hello timers).</li>
+                        <li>submit App early on</li>
+                    </ul>
+                </aside>
+            </section>
+        </section>
+        <section>
+
+        </section>
+    </div>
+</div>
+<script type="module">
+    import Reveal from '/revealjs/dist/reveal.esm.js';
+    import Markdown from '/revealjs/plugin/markdown/markdown.esm.js';
+    import RevealHighlight from '/revealjs/plugin/highlight/highlight.esm.js';
+
+    let deck = new Reveal({
+       //showNotes: "separate-page",
+       //showNotes: true,
+       plugins: [ RevealHighlight ]
+    })
+    deck.initialize();
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "demo-js",
+  "version": "1.0.0",
+  "description": "NodeJS On Android Demo",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Lukas Zaugg <l.zaugg@mypi.ch>",
+  "license": "MIT",
+  "dependencies": {
+    "@fastify/static": "^6.10.1",
+    "fastify": "^4.17.0",
+    "reveal.js": "^4.5.0"
+  }
+}
